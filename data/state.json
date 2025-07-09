@@ -1,0 +1,6 @@
+{
+  "held": ["BTC", "ETH", "SOL", "ADA", "MATIC", "LTC", "DOT", "AVAX", "LINK", "DOGE", "BCH", "ATOM", "ALGO", "ETC", "XLM", "AAVE"],
+  "last_rotation": "2025-07-02",
+  "entry_prices": {},
+  "stop_losses": {}
+}

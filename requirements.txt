@@ -1,0 +1,25 @@
+# Core libs
+numpy
+pandas
+requests
+schedule
+
+# Environment
+python-dotenv
+
+# Coinbase Advanced SDK
+coinbase-advanced-py
+
+# Telegram
+python-telegram-bot==22.1
+
+# Sentiment analysis
+vaderSentiment>=3.3.2
+praw>=7.8.1,<8.0
+
+# ML
+scikit-learn==1.7.0
+joblib==1.5.1
+
+# Testing
+pytest>=7.0.0

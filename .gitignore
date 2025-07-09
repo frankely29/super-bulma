@@ -1,0 +1,15 @@
+.env
+*.pem
+*.key
+__pycache__/
+data/*
+!data/state.json
+trade_stats.json
+logs/
+venv/
+bot.lock.venv/
+
+# local junk
+.venv/
+bot.lock
+coin_state.json
