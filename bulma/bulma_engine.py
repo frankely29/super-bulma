@@ -3,6 +3,8 @@ import pandas as pd
 import numpy as np
 import joblib
 
+AGGRESSIVENESS = 1.15  # 15% more aggressive
+
 def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     hl = df["high"] - df["low"]
     hc = (df["high"] - df["close"].shift()).abs()
@@ -42,7 +44,7 @@ def gohan_strat(df: pd.DataFrame):
     if sma10 > sma50: score += 2
     if vol_now > vol_avg * 1.2: score += 1.5
     if price_change > 0.01: score += 1.5
-    return score
+    return score * AGGRESSIVENESS
 
 def jiren_strat(df: pd.DataFrame):
     if len(df) < 50:
@@ -58,7 +60,7 @@ def jiren_strat(df: pd.DataFrame):
     if macd_line > macd_sig: score += 2.5
     if df["close"].iloc[-1] > sma20: score += 2
     if vol_now > vol_avg * 1.1: score += 0.5
-    return score
+    return score * AGGRESSIVENESS
 
 def freezer_strat(df: pd.DataFrame):
     if len(df) < 30:
@@ -71,7 +73,7 @@ def freezer_strat(df: pd.DataFrame):
     if rsi > 50: score += 2
     if macd_hist > 0: score += 2
     if price_change > 0.02: score += 2
-    return score
+    return score * AGGRESSIVENESS
 
 def beerus_vote(g, j, f):
     return (g + j + f) / 3
@@ -188,15 +190,12 @@ class BulmaEngine:
             features = features[scaler_cols]
         except Exception as align_error:
             print(f"❌ Column alignment failed: {align_error}")
-            print("Columns in features:", list(features.columns))
-            print("Columns expected by scaler:", scaler_cols)
             raise
 
         try:
             X_scaled = self.scaler.transform(features)
         except Exception as scale_err:
             print(f"❌ Scaler.transform failed: {scale_err}")
-            print("Features passed to scaler:", features)
             raise
 
         pred = self.model.predict(X_scaled)[0]
@@ -206,8 +205,6 @@ class BulmaEngine:
         close_price = latest["close"]
         atr = calculate_atr(df).iloc[-1] if not pd.isna(calculate_atr(df).iloc[-1]) else close_price * 0.02
 
-        # --- 30% More Aggressive Buy Logic ---
-        price_change = (df["close"].iloc[-1] - df["close"].iloc[-2]) / df["close"].iloc[-2] if len(df) >= 2 else 0.0
         if symbol in self.entry_prices:
             self.trailing_highs[symbol] = max(
                 self.trailing_highs.get(symbol, self.entry_prices[symbol]),
@@ -228,19 +225,12 @@ class BulmaEngine:
                 self._clear_position(symbol)
                 return "sell", confidence
 
-        if current_balance == 0:
-            buy_signal = (
-                pred == "buy"
-                or g > 2.5    # Lower Gohan threshold (was 3)
-                or (j > 1.8 and f > 1)  # Slightly lower confluence
-                or (latest["vol_z"] > 0.75 and price_change > 0.004)  # Slightly easier momentum buy
-            )
-            if buy_signal:
-                self.entry_prices[symbol] = close_price
-                self.stop_losses[symbol] = close_price - 2 * atr
-                self.profit_tiers[symbol] = 0
-                self.trailing_highs[symbol] = close_price
-                return "buy", confidence
+        if current_balance == 0 and pred == "buy":
+            self.entry_prices[symbol] = close_price
+            self.stop_losses[symbol] = close_price - 2 * atr
+            self.profit_tiers[symbol] = 0
+            self.trailing_highs[symbol] = close_price
+            return "buy", confidence
 
         return pred, round(confidence, 2)
 
@@ -255,7 +245,6 @@ if __name__ == "__main__":
     try:
         engine = BulmaEngine()
         print("BulmaEngine initialized successfully")
-        import pandas as pd
         candles = pd.read_csv("bulma/Bitstamp_XLMUSD_1h.csv")
         pred, conf = engine.predict("XLMUSD", candles)
         print(f"Prediction: {pred}, Confidence: {conf}")
