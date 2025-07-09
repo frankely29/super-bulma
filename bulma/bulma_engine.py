@@ -111,6 +111,8 @@ class BulmaEngine:
             print("Loading model...")
             self.model = joblib.load(model_path)
             print("Model loaded successfully")
+            # ** NEW ** print model classes
+            print(f"❓ Model classes: {self.model.classes_}")
         except Exception as e:
             print(f"❌ Model load failed: {repr(e)}")
             raise
@@ -124,7 +126,7 @@ class BulmaEngine:
             df.rename(columns={df.columns[-1]: "volume"}, inplace=True)
         df.index = pd.to_datetime(df.index, unit="s")
 
-        # Feature calculations
+        # Feature calculations…
         df["pct_1"] = df["close"].pct_change()
         df["pct_6"] = df["close"].pct_change(6)
         df["pct_24"] = df["close"].pct_change(24)
@@ -160,7 +162,7 @@ class BulmaEngine:
         f = freezer_strat(df)
         bvote = beerus_vote(g, j, f)
 
-        # Build DataFrame with exact scaler columns
+        # Build features DataFrame… (unchanged)
         expected_columns = [
             'pct_1', 'pct_6', 'pct_24', 'momentum', 'volatility', 'range_atr',
             'pos_in_range', 'bollinger_b', 'vol_z', 'sin_hour', 'cos_hour',
@@ -180,35 +182,28 @@ class BulmaEngine:
         ]], columns=expected_columns)
 
         scaler_cols = list(self.scaler.feature_names_in_)
-        try:
-            for col in scaler_cols:
-                if col not in features.columns:
-                    features[col] = 0.0
-            features = features[scaler_cols]
-        except Exception as align_error:
-            print(f"❌ Column alignment failed: {align_error}")
-            raise
+        for col in scaler_cols:
+            if col not in features.columns:
+                features[col] = 0.0
+        features = features[scaler_cols]
 
-        try:
-            X_scaled = self.scaler.transform(features)
-        except Exception as scale_err:
-            print(f"❌ Scaler.transform failed: {scale_err}")
-            raise
-
+        X_scaled = self.scaler.transform(features)
         pred = self.model.predict(X_scaled)[0]
+        # ** NEW ** debug print for pred
+        print(f"DEBUG: model returned pred={pred!r}")
         conf_proba = self.model.predict_proba(X_scaled)[0]
         confidence = bvote * 0.5 + max(conf_proba) * 10 * 0.5
 
         close_price = latest["close"]
         atr = calculate_atr(df).iloc[-1] if not pd.isna(calculate_atr(df).iloc[-1]) else close_price * 0.02
 
+        # SELL logic (unchanged)
         if symbol in self.entry_prices:
             self.trailing_highs[symbol] = max(
                 self.trailing_highs.get(symbol, self.entry_prices[symbol]),
                 close_price
             )
             tier = self.profit_tiers.get(symbol, 0)
-            # ---- LESS AGGRESSIVE SELL: raise thresholds by 15% and require higher confidence ----
             if tier == 0 and (close_price - self.entry_prices[symbol]) >= 1.72 * atr and confidence >= 7.5:
                 self.profit_tiers[symbol] = 1
                 return "sell", confidence
@@ -219,15 +214,17 @@ class BulmaEngine:
             if tier >= 2 and close_price <= self.trailing_highs[symbol] - 4.6 * atr and confidence >= 7.5:
                 self._clear_position(symbol)
                 return "sell", confidence
-            # Stop-loss further away and only at high confidence
             if df["low"].iloc[-1] <= self.stop_losses.get(symbol, 0) and confidence >= 7.5:
                 self._clear_position(symbol)
                 return "sell", confidence
 
-        if current_balance == 0 and pred == "buy":
-            self.entry_prices[symbol] = close_price
-            self.stop_losses[symbol] = close_price - 2 * atr
-            self.profit_tiers[symbol] = 0
+        # BUY logic (updated)
+        # replace "BUY" below with the exact label printed above if different
+        buy_label = "BUY"
+        if symbol not in self.entry_prices and pred == buy_label:
+            self.entry_prices[symbol]   = close_price
+            self.stop_losses[symbol]    = close_price - 2 * atr
+            self.profit_tiers[symbol]   = 0
             self.trailing_highs[symbol] = close_price
             return "buy", confidence
 
