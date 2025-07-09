@@ -3,8 +3,6 @@ import pandas as pd
 import numpy as np
 import joblib
 
-AGGRESSIVENESS = 1.15  # 15% more aggressive
-
 def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     hl = df["high"] - df["low"]
     hc = (df["high"] - df["close"].shift()).abs()
@@ -44,7 +42,7 @@ def gohan_strat(df: pd.DataFrame):
     if sma10 > sma50: score += 2
     if vol_now > vol_avg * 1.2: score += 1.5
     if price_change > 0.01: score += 1.5
-    return score * AGGRESSIVENESS
+    return score
 
 def jiren_strat(df: pd.DataFrame):
     if len(df) < 50:
@@ -60,7 +58,7 @@ def jiren_strat(df: pd.DataFrame):
     if macd_line > macd_sig: score += 2.5
     if df["close"].iloc[-1] > sma20: score += 2
     if vol_now > vol_avg * 1.1: score += 0.5
-    return score * AGGRESSIVENESS
+    return score
 
 def freezer_strat(df: pd.DataFrame):
     if len(df) < 30:
@@ -73,7 +71,7 @@ def freezer_strat(df: pd.DataFrame):
     if rsi > 50: score += 2
     if macd_hist > 0: score += 2
     if price_change > 0.02: score += 2
-    return score * AGGRESSIVENESS
+    return score
 
 def beerus_vote(g, j, f):
     return (g + j + f) / 3
@@ -181,7 +179,6 @@ class BulmaEngine:
             g, j, f, bvote
         ]], columns=expected_columns)
 
-        # Align feature columns with scaler
         scaler_cols = list(self.scaler.feature_names_in_)
         try:
             for col in scaler_cols:
@@ -211,17 +208,19 @@ class BulmaEngine:
                 close_price
             )
             tier = self.profit_tiers.get(symbol, 0)
-            if tier == 0 and (close_price - self.entry_prices[symbol]) >= 1.5 * atr:
+            # ---- LESS AGGRESSIVE SELL: raise thresholds by 15% and require higher confidence ----
+            if tier == 0 and (close_price - self.entry_prices[symbol]) >= 1.72 * atr and confidence >= 7.5:
                 self.profit_tiers[symbol] = 1
                 return "sell", confidence
-            if tier == 1 and (close_price - self.entry_prices[symbol]) >= 3 * atr:
+            if tier == 1 and (close_price - self.entry_prices[symbol]) >= 3.45 * atr and confidence >= 7.5:
                 self.profit_tiers[symbol] = 2
-                self.stop_losses[symbol] = close_price - 4 * atr
+                self.stop_losses[symbol] = close_price - 4.6 * atr
                 return "sell", confidence
-            if tier >= 2 and close_price <= self.trailing_highs[symbol] - 4 * atr:
+            if tier >= 2 and close_price <= self.trailing_highs[symbol] - 4.6 * atr and confidence >= 7.5:
                 self._clear_position(symbol)
                 return "sell", confidence
-            if df["low"].iloc[-1] <= self.stop_losses.get(symbol, 0):
+            # Stop-loss further away and only at high confidence
+            if df["low"].iloc[-1] <= self.stop_losses.get(symbol, 0) and confidence >= 7.5:
                 self._clear_position(symbol)
                 return "sell", confidence
 
@@ -245,6 +244,7 @@ if __name__ == "__main__":
     try:
         engine = BulmaEngine()
         print("BulmaEngine initialized successfully")
+        import pandas as pd
         candles = pd.read_csv("bulma/Bitstamp_XLMUSD_1h.csv")
         pred, conf = engine.predict("XLMUSD", candles)
         print(f"Prediction: {pred}, Confidence: {conf}")
