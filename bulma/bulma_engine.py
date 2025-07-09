@@ -11,7 +11,7 @@ def calculate_atr(df: pd.DataFrame, period: int = 14) -> pd.Series:
     tr = pd.concat([hl, hc, lc], axis=1).max(axis=1)
     return tr.rolling(period).mean()
 
- def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
+def calculate_rsi(df: pd.DataFrame, period: int = 14) -> pd.Series:
     delta = df["close"].diff()
     gain = delta.clip(lower=0).rolling(period).mean()
     loss = (-delta.clip(upper=0)).rolling(period).mean()
